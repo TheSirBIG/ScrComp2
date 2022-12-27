@@ -12,9 +12,11 @@
 #include <Windows.h>
 #include <iostream>
 
+#define LOADBMP
+
 int main()
 {
-    HDC hdcScreen;
+//    HDC hdcScreen;
     HDC hdcWindow;
     HDC hdcMemDC = NULL;
     HBITMAP hbmScreen = NULL;
@@ -25,6 +27,7 @@ int main()
     char* lpbitmap = NULL;
     HANDLE hDIB = NULL;
     DWORD dwBmpSize = 0;
+    int www;
 
     std::cout << "Make wanted windows active, there is 5 second to do this\n";
     Sleep(5000);
@@ -34,7 +37,7 @@ int main()
 
     // Retrieve the handle to a display device context for the client 
     // area of the window. 
-    hdcScreen = GetDC(NULL);
+//    hdcScreen = GetDC(NULL);
     hdcWindow = GetDC(hWnd);
 
     // Create a compatible DC, which is used in a BitBlt from the window DC.
@@ -69,6 +72,9 @@ int main()
     }
     */
     // Create a compatible bitmap from the Window DC.
+#ifdef LOADBMP
+    hbmScreen = (HBITMAP)LoadImage(NULL, L"D://tstscr.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+#else
     hbmScreen = CreateCompatibleBitmap(hdcWindow, rcClient.right - rcClient.left, rcClient.bottom - rcClient.top);
 
     if (!hbmScreen)
@@ -76,7 +82,6 @@ int main()
         MessageBox(hWnd, L"CreateCompatibleBitmap Failed", L"Failed", MB_OK);
         goto done;
     }
-
     // Select the compatible bitmap into the compatible memory DC.
     SelectObject(hdcMemDC, hbmScreen);
 
@@ -91,6 +96,7 @@ int main()
         MessageBox(hWnd, L"BitBlt has failed", L"Failed", MB_OK);
         goto done;
     }
+#endif
 
     // Get the BITMAP from the HBITMAP.
     GetObject(hbmScreen, sizeof(BITMAP), &bmpScreen);
@@ -103,6 +109,7 @@ int main()
     bi.biHeight = bmpScreen.bmHeight;
     bi.biPlanes = 1;
     bi.biBitCount = 32;
+//    bi.biBitCount = 24;
     bi.biCompression = BI_RGB;
     bi.biSizeImage = 0;
     bi.biXPelsPerMeter = 0;
@@ -111,6 +118,9 @@ int main()
     bi.biClrImportant = 0;
 
     dwBmpSize = ((bmpScreen.bmWidth * bi.biBitCount + 31) / 32) * 4 * bmpScreen.bmHeight;
+    std::cout << dwBmpSize << std::endl;
+    www = dwBmpSize / bmpScreen.bmHeight;
+    www = www / 4;
 
     // Starting with 32-bit Windows, GlobalAlloc and LocalAlloc are implemented as wrapper functions that 
     // call HeapAlloc using a handle to the process's default heap. Therefore, GlobalAlloc and LocalAlloc 
@@ -149,19 +159,58 @@ int main()
     WriteFile(hFile, (LPSTR)&bi, sizeof(BITMAPINFOHEADER), &dwBytesWritten, NULL);
     WriteFile(hFile, (LPSTR)lpbitmap, dwBmpSize, &dwBytesWritten, NULL);
 
+    // Close the handle for the file that was created.
+    CloseHandle(hFile);
+
+
+    // Сейчас картинка лежит в hbmScreen, информация в bmpScreen
+    std::cout << bmpScreen.bmWidth << "," << bmpScreen.bmHeight << std::endl;
+    // точки картинки лежат в lpbitmap
+    // поиск, изменение в массиве
+    RECT pict1, pict2;
+    pict1.left = 29;
+    pict1.top = 0;
+    pict1.right = 803;
+    pict1.bottom = 858;
+    pict2.left = 834;
+    pict2.top = 193;
+    for(int i = pict1.left; i <= pict1.right; i++)
+        for (int j = pict1.top; j <= pict1.bottom; j++)
+        {
+            if (lpbitmap[(www * j + i) * 4] != lpbitmap[(www * j + (i-pict1.left+pict2.left)) * 4])
+                lpbitmap[(www * j + i) * 4] = lpbitmap[(www * j + i) * 4 + 1] = lpbitmap[(www * j + i) * 4 + 2] = lpbitmap[(www * j + i) * 4 + 3] = 55;
+        }
+
+
+
+
+    // запись нового файла
+    hFile = CreateFile(L"D:\\captureqwsx_new.bmp",
+        GENERIC_WRITE,
+        0,
+        NULL,
+        CREATE_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL, NULL);
+    WriteFile(hFile, (LPSTR)&bmfHeader, sizeof(BITMAPFILEHEADER), &dwBytesWritten, NULL);
+    WriteFile(hFile, (LPSTR)&bi, sizeof(BITMAPINFOHEADER), &dwBytesWritten, NULL);
+    WriteFile(hFile, (LPSTR)lpbitmap, dwBmpSize, &dwBytesWritten, NULL);
+    CloseHandle(hFile);
+
+
+
+
     // Unlock and Free the DIB from the heap.
     GlobalUnlock(hDIB);
     GlobalFree(hDIB);
 
-    // Close the handle for the file that was created.
-    CloseHandle(hFile);
 
     // Clean up.
 done:
     DeleteObject(hbmScreen);
     DeleteObject(hdcMemDC);
-    ReleaseDC(NULL, hdcScreen);
+//    ReleaseDC(NULL, hdcScreen);
     ReleaseDC(hWnd, hdcWindow);
+
 
     return 0;
 }
